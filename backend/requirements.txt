@@ -1,0 +1,6 @@
+flask 
+flask-cors
+earthaccess
+xarray
+h5netcdf
+netCDF4
