@@ -251,7 +251,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/calculate-probability",
+        "https://sturdy-space-eureka-69vr47rjvprf47vw-5000.app.github.dev/api/calculate-probability",
         {
           method: "POST",
           headers: {
