@@ -170,7 +170,7 @@ def calculate_probability():
         day = target_date.day
         target_hour = int(time.split(':')[0])
         
-        years = range(2023, 2026)
+        years = range(2020, 2023)
         bbox = (lon - 0.5, lat - 0.5, lon + 0.5, lat + 0.5)
         
         results = {
