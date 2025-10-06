@@ -12,7 +12,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Loader2,
   MapPin,
@@ -28,40 +34,46 @@ import React from "react";
 
 interface WeatherProbabilities {
   rain?: {
-    probability: number;
-    avgDays: number;
-    maxRecorded: number;
-    message: string;
+    probability?: number;
+    avgDays?: number;
+    maxRecorded?: number;
+    message?: string;
+    error?: string;
   };
   temperature?: {
-    avg: number;
-    min: number;
-    max: number;
-    message: string;
+    avg?: number;
+    min?: number;
+    max?: number;
+    message?: string;
+    error?: string;
   };
   extreme_rain?: {
-    probability: number;
-    avgDays: number;
-    maxRecorded: number;
-    message: string;
+    probability?: number;
+    avgDays?: number;
+    maxRecorded?: number;
+    message?: string;
+    error?: string;
   };
   heat_wave?: {
-    probability: number;
-    avgDays: number;
-    maxTemp: number;
-    message: string;
+    probability?: number;
+    avgDays?: number;
+    maxTemp?: number;
+    message?: string;
+    error?: string;
   };
   wind?: {
-    probability: number;
-    avgSpeed: number;
-    maxSpeed: number;
-    message: string;
+    probability?: number;
+    avgSpeed?: number;
+    maxSpeed?: number;
+    message?: string;
+    error?: string;
   };
   cold?: {
-    probability: number;
-    avgDays: number;
-    minTemp: number;
-    message: string;
+    probability?: number;
+    avgDays?: number;
+    minTemp?: number;
+    message?: string;
+    error?: string;
   };
 }
 
@@ -73,9 +85,10 @@ interface ApiResponse {
 }
 
 export default function Home() {
+  const [mounted, setMounted] = React.useState(false);
   const [date, setDate] = React.useState<Date | undefined>(new Date());
   const [time, setTime] = React.useState("12:00");
-  const [lat, setLat] = React.useState("-33.4489"); // Santiago por defecto
+  const [lat, setLat] = React.useState("-33.4489");
   const [lon, setLon] = React.useState("-70.6693");
   const [conditions, setConditions] = React.useState<string[]>([
     "rain",
@@ -84,6 +97,14 @@ export default function Home() {
   const [loading, setLoading] = React.useState(false);
   const [results, setResults] = React.useState<ApiResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [showMapModal, setShowMapModal] = React.useState(false);
+  const mapRef = React.useRef<HTMLDivElement>(null);
+  const leafletMapRef = React.useRef<any>(null);
+  const markerRef = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const conditionOptions = [
     { id: "rain", label: "Lluvia", icon: CloudRain },
@@ -94,6 +115,17 @@ export default function Home() {
     { id: "cold", label: "Frío Extremo", icon: Snowflake },
   ];
 
+  const popularCities = [
+    { name: "Lima, Perú", lat: "-12.05", lon: "-77.05" },
+    { name: "Santiago, Chile", lat: "-33.45", lon: "-70.67" },
+    { name: "Ciudad de México", lat: "19.43", lon: "-99.13" },
+    { name: "Nueva York, USA", lat: "40.71", lon: "-74.01" },
+    { name: "Londres, UK", lat: "51.51", lon: "-0.13" },
+    { name: "Tokyo, Japón", lat: "35.68", lon: "139.65" },
+    { name: "Buenos Aires, Argentina", lat: "-34.60", lon: "-58.38" },
+    { name: "Bogotá, Colombia", lat: "4.71", lon: "-74.07" },
+  ];
+
   const handleConditionChange = (conditionId: string, checked: boolean) => {
     if (checked) {
       setConditions((prev) => [...prev, conditionId]);
@@ -102,20 +134,103 @@ export default function Home() {
     }
   };
 
+  const loadLeafletScript = () => {
+    return new Promise<void>((resolve) => {
+      if (typeof window !== "undefined" && !(window as any).L) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href =
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+        document.head.appendChild(link);
+
+        const script = document.createElement("script");
+        script.src =
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+        script.async = true;
+        script.onload = () => resolve();
+        document.head.appendChild(script);
+      } else {
+        resolve();
+      }
+    });
+  };
+
+  const initializeMap = async () => {
+    if (!mapRef.current || leafletMapRef.current) return;
+
+    await loadLeafletScript();
+    const L = (window as any).L;
+
+    const position: [number, number] = [parseFloat(lat), parseFloat(lon)];
+
+    leafletMapRef.current = L.map(mapRef.current).setView(position, 12);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 18,
+    }).addTo(leafletMapRef.current);
+
+    markerRef.current = L.marker(position, { draggable: true }).addTo(
+      leafletMapRef.current
+    );
+    markerRef.current.bindPopup("Tu ubicación").openPopup();
+
+    markerRef.current.on("dragend", function (e: any) {
+      const newPos = e.target.getLatLng();
+      setLat(newPos.lat.toFixed(4));
+      setLon(newPos.lng.toFixed(4));
+    });
+
+    leafletMapRef.current.on("click", function (e: any) {
+      const newLat = e.latlng.lat.toFixed(4);
+      const newLng = e.latlng.lng.toFixed(4);
+      setLat(newLat);
+      setLon(newLng);
+      markerRef.current.setLatLng([newLat, newLng]);
+      markerRef.current.bindPopup(`📍 ${newLat}°, ${newLng}°`).openPopup();
+    });
+  };
+
+  React.useEffect(() => {
+    if (showMapModal) {
+      setTimeout(initializeMap, 100);
+    }
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [showMapModal]);
+
   const getCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setLat(position.coords.latitude.toFixed(4));
           setLon(position.coords.longitude.toFixed(4));
+          setShowMapModal(true);
         },
         (error) => {
           console.error("Error getting location:", error);
-          alert(
-            "No se pudo obtener la ubicación. Usando Santiago, Chile por defecto."
-          );
+          setShowMapModal(true);
         }
       );
+    } else {
+      setShowMapModal(true);
+    }
+  };
+
+  const selectCity = (city: { name: string; lat: string; lon: string }) => {
+    setLat(city.lat);
+    setLon(city.lon);
+    if (leafletMapRef.current && markerRef.current) {
+      const L = (window as any).L;
+      const newPos: [number, number] = [parseFloat(city.lat), parseFloat(city.lon)];
+      leafletMapRef.current.setView(newPos, 12);
+      markerRef.current.setLatLng(newPos);
+      markerRef.current.bindPopup(`📍 ${city.name}`).openPopup();
     }
   };
 
@@ -172,6 +287,21 @@ export default function Home() {
     icon: React.ElementType
   ) => {
     const Icon = icon;
+
+    if (data.error) {
+      return (
+        <Card key={type} className="p-4 border-orange-200 bg-orange-50">
+          <div className="flex items-center gap-3 mb-3">
+            <AlertTriangle className="h-5 w-5 text-orange-600" />
+            <h3 className="font-semibold capitalize">
+              {type.replace("_", " ")}
+            </h3>
+          </div>
+          <p className="text-orange-800 text-sm">{data.message}</p>
+        </Card>
+      );
+    }
+
     return (
       <Card key={type} className="p-4">
         <div className="flex items-center gap-3 mb-3">
@@ -192,12 +322,12 @@ export default function Home() {
             <div className="text-2xl font-bold text-center">
               {data.probability}%
             </div>
-            {data.avgDays && (
+            {data.avgDays !== undefined && (
               <div className="text-sm text-gray-600 text-center">
                 ~{data.avgDays} días/mes
               </div>
             )}
-            {data.maxRecorded && (
+            {data.maxRecorded !== undefined && (
               <div className="text-xs text-gray-500 text-center">
                 Máx registrado: {data.maxRecorded}
                 {type === "wind" ? "m/s" : "mm"}
@@ -216,16 +346,14 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold text-gray-900">🛰️ SpaceRain</h1>
+          <h1 className="text-4xl font-bold text-gray-900">SpaceRain</h1>
           <p className="text-xl text-gray-600">
             Encuentra el mejor día para tu evento con datos de la NASA
           </p>
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Panel de Configuración */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -238,21 +366,23 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Fecha */}
               <div>
                 <Label className="text-base font-medium mb-3 block">
                   Fecha del Evento
                 </Label>
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  className="rounded-lg border"
-                  disabled={(date) => date < new Date()}
-                />
+                {mounted ? (
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-lg border"
+                    disabled={(date) => date < new Date()}
+                  />
+                ) : (
+                  <div className="h-[320px] rounded-lg border bg-gray-100 animate-pulse" />
+                )}
               </div>
 
-              {/* Hora */}
               <div className="space-y-2">
                 <Label htmlFor="time" className="flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -266,7 +396,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* Ubicación */}
               <div className="space-y-3">
                 <Label className="text-base font-medium">Ubicación</Label>
                 <div className="flex gap-2">
@@ -305,7 +434,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Condiciones Climáticas */}
               <div className="space-y-3">
                 <Label className="text-base font-medium">
                   Condiciones a Analizar
@@ -332,7 +460,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Botón de Análisis */}
               <Button
                 onClick={calculateProbabilities}
                 disabled={loading || !date || conditions.length === 0}
@@ -345,13 +472,12 @@ export default function Home() {
                     Analizando datos de NASA...
                   </>
                 ) : (
-                  "🛰️ Analizar con Datos de NASA"
+                  "Analizar con Datos de NASA"
                 )}
               </Button>
             </CardContent>
           </Card>
 
-          {/* Panel de Resultados */}
           <div className="space-y-4">
             {error && (
               <Card className="border-red-200 bg-red-50">
@@ -373,7 +499,7 @@ export default function Home() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-green-700">
-                      ✅ Análisis Completado
+                       Análisis Completado
                     </CardTitle>
                     <CardDescription>
                       Resultados para {results.location} el {results.date} a las{" "}
@@ -413,6 +539,66 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showMapModal} onOpenChange={setShowMapModal}>
+        <DialogContent className="max-w-4xl h-[750px] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <MapPin className="h-6 w-6 text-blue-600" />
+              Selecciona tu ubicación en el mapa
+            </DialogTitle>
+            <DialogDescription className="text-base">
+              Haz clic en el mapa o arrastra el marcador para ajustar la ubicación exacta
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 flex flex-col gap-4 overflow-auto">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <MapPin className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-blue-900">Ubicación seleccionada:</p>
+                  <p className="text-blue-800 text-lg font-mono mt-1">
+                    {lat}°, {lon}°
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-sm font-semibold mb-2 block">Ciudades populares</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {popularCities.map((city) => (
+                  <Button
+                    key={city.name}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => selectCity(city)}
+                    className="text-xs justify-start hover:bg-blue-50 hover:border-blue-300"
+                  >
+                    {city.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div
+              ref={mapRef}
+              className="flex-1 rounded-lg border-2 border-gray-300 bg-gray-100 shadow-inner"
+              style={{ minHeight: "400px" }}
+            />
+
+            <Button 
+              onClick={() => setShowMapModal(false)} 
+              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all"
+              size="lg"
+            >
+              <MapPin className="h-5 w-5 mr-2" />
+              Confirmar ubicación
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

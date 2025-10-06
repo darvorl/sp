@@ -21,7 +21,7 @@ CORS(app, resources={
 })
 
 # Login a NASA (una sola vez al iniciar)
-os.environ["NETRC"] = "/workspaces/d/_netrc"
+os.environ["NETRC"] = "/workspaces/sp/_netrc"
 auth = earthaccess.login()
 
 @app.route('/api/calculate-probability', methods=['POST'])
@@ -46,7 +46,7 @@ def calculate_probability():
         day = target_date.day
         target_hour = int(time.split(':')[0])
         
-        years = range(2010, 2011)
+        years = range(2014, 2024)
         bbox = (lon - 1, lat - 1, lon + 1, lat + 1)
         
         results = {
